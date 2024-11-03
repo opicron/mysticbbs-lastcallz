@@ -5,6 +5,7 @@ Mystic BBS lastcaller mod
 
 - Show Calls, ULs/DLs (and size), Doors, Mails
 - 100% configurable
+- Full color control of User, Location and Date strings (per character)
 - Saves all callers for full history
 - Optimized filereading for years of caller information
 - Scrollable lastcallers list
