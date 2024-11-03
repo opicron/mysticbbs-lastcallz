@@ -937,8 +937,8 @@ def main():
     update_json_callers()
     mysticCallers[:] = [] #release memory
 
-    sysoplog(1,'lastCallz - Viewing history')
-    menucmd('NA','lastCallz - Viewing history')
+    bbs.sysoplog(1,'lastCallz - Viewing history')
+    bbs.menucmd('NA','lastCallz - Viewing history')
     show_callers()
     
 
