@@ -3,6 +3,7 @@ Mystic BBS lastcaller mod
 
 ## Finally a Amiga Last Caller competitor
 
+- Wide screen compatible, just need to create the ANS and configuration
 - Show Calls, ULs/DLs (and size), Doors, Mails
 - 100% configurable, optional before and after MCI codes
 - Full color control of User, Location and Date strings (per character)
