@@ -4,7 +4,7 @@ Mystic BBS lastcaller mod
 ## Finally a Amiga Last Caller competitor
 
 - Show Calls, ULs/DLs (and size), Doors, Mails
-- 100% configurable
+- 100% configurable, optional before and after MCI codes
 - Full color control of User, Location and Date strings (per character)
 - Saves all callers for full history
 - Optimized filereading for years of caller information
