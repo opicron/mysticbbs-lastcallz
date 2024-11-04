@@ -364,6 +364,8 @@ def get_last_callers():
     global mysticCallers
     global mysticHistory
 
+    # used to determine if callers.dat last entry should be indexed
+    currentuser = bbs.getuser(0)['handle']
     callersfile = datapath+"callers.dat"
 
     if not os.path.exists(callersfile) or os.path.getsize(callersfile) == 0:
@@ -485,12 +487,10 @@ def get_last_callers():
 
             #bbs.writeln(str(caller)) 
 
-            #TODO: check below
-            #do we need to beware not to add current user as the stats
-            #have not been saved to callers.dat yet?
-            #skip first entry!
-            #line = f.read(size)
-            if f.tell() != os.path.getsize(callersfile):
+            # add callers.dat entry if not last entry
+            # or if last entry and current caller is different than last caller
+            # this makes sure that saving the entries from caller.dat have the latest written mystic info
+            if f.tell() != os.path.getsize(callersfile) or (f.tell() == os.path.getsize(callersfile) and currentuser != caller['Handle']):
                 mysticCallers.append( caller )
             else:
                 #bbs.write(unpackdt(caller['Date'],'%H%M'))
@@ -630,7 +630,14 @@ def get_previous_caller(file, orig_filepos):
 
     #dynamic TodaysCallers added to dict
     jsonCaller['TodaysCalls'] = 1
-    jsonCaller['FilePos'] = orig_filepos
+
+    #important: filepos is used for cummulative calculations
+    #when last caller has same date use the filepos of previous caller 
+    #so the cummulative calculation will always take all callers of that date
+    if len(Callers) == 0 or unpackdt(Callers[len(Callers)-1]['Date'],'%d%m%Y') != unpackdt(jsonCaller['Date'],'%d%m%Y'):
+       jsonCaller['FilePos'] = orig_filepos
+    else:
+       jsonCaller['FilePos'] = Callers[len(Callers)-1]['FilePos']
 
     while filepos >= 0: # and jsonCaller['Handle'] != prevCaller['Handle']:
         
@@ -681,8 +688,11 @@ def show_callers():
     redraw = True
 
     index = 0
+    history_filepos = 0
+
     for i in range(listsize):
         filepos = get_previous_caller(file, filepos)
+        
         if filepos > 0:
             index += 1
             min_index = index
@@ -705,7 +715,7 @@ def show_callers():
 
             elif key == KEY_UP:
                 if filepos > 0 and index == len(Callers): # dont preload if index less than callers list length!
-                    filepos = get_previous_caller(file, filepos)                   
+                    filepos = get_previous_caller(file, filepos)
                     if filepos == -1:
                         max_index = index + 1
 
@@ -734,8 +744,11 @@ def show_callers():
                 historysize = config.getint('general','historysize')
                 historyDates = []
                 
+                bbs.gotoxy(1,1)
                 for Caller in Callers[index-listsize:]:
-                    #TODO: ADD FILEPOS OF JSON FILE TO MANUALLY CALCULATE OTHER DATA, LIKE DOORS
+
+                    #do note that the FilePos of the last caller of date is used
+                    #see get_previous_caller function!
                     tmp = {
                         "Date": Caller['Date'],
                         "FilePos": Caller['FilePos']
@@ -744,13 +757,9 @@ def show_callers():
                     if count == 0:
                         historyDates.insert(0, tmp) 
                         found += 1
-                    elif unpackdt(historyDates[len(historyDates)-1]['Date'],'%d%m%Y') != unpackdt(Caller['Date'],'%d%m%Y'):
+                    elif unpackdt(historyDates[0]['Date'],'%d%m%Y') != unpackdt(Caller['Date'],'%d%m%Y'):
                         historyDates.insert(0, tmp)
                         found += 1
-
-                    #elif unpackdt(Caller['Date'],'%d%m%Y') != unpackdt(historyDateFirst,'%d%m%Y'):
-                    #    historyDateSecond = Caller['Date']
-                    #    #break
                     
                     count += 1
                     if found > historysize - 1:
@@ -771,7 +780,8 @@ def show_callers():
 
                     colors = mci_extract_colors( config.get('mci','handlecolors') )
                     bbs.setpinfo(1,color(Caller['Handle'],colors))
-                    bbs.setpinfo(2,color(Caller['City'],colors))
+                    location_max_len = config.getint('general','location_max_length')
+                    bbs.setpinfo(2,color(Caller['City'][:location_max_len],colors))
                     bbs.setpinfo(3,todayscalls)
 
                     colors = mci_extract_colors( config.get('mci','nodecolors') )
@@ -796,10 +806,26 @@ def show_callers():
 def closest_datetime(target, dict_list):
     """ 
     Find the dictionary with the minimum time difference 
-    in 'data' field from the target, works in 99% of the time
+    in 'Date' field from the target, but only if it's on the same day.
+    Assumes both 'Date' and target are timestamps, and converts to UTC.
     """
-    return min(dict_list, key=lambda x: abs(x['Date'] - target))
+    # Convert target timestamp to a UTC datetime object and extract date
+    target_date = datetime.utcfromtimestamp(target).date()
+    
+    # Filter dict_list to include only entries with the same date as the target date
+    same_day_dicts = [
+        d for d in dict_list
+        if unpackdt(d['Date'],'%d%m%Y') == unpackdt(target,'%d%m%Y')
+        #if datetime.utcfromtimestamp(d['Date']).date() == target_date  # Convert each timestamp to UTC date for comparison
+    ]
 
+    # If no entries are on the same day, return None
+    if not same_day_dicts:
+        return None
+
+    # Find the dictionary with the closest timestamp on the same day
+    closest_dict = min(same_day_dicts, key=lambda x: abs(target - x['Date']))
+    return closest_dict
 
 def get_cumulative_by_date(date, filepos):
     """ 
@@ -864,6 +890,11 @@ def show_history():
     global historyDates
     global mysticHistory
     #global jsonCallers
+    #bbs.gotoxy(1,1)
+    #bbs.write(str(historyDates))
+    #format = config.get('general','format')
+    #for Date in historyDates:
+    #    bbs.write(unpackdt(Date['Date'],format))
 
     historypos = config.get('mci','historypos')
     bbs.write(historypos)
@@ -873,10 +904,13 @@ def show_history():
 
     count = 0
     
+    format = config.get('general','format')
+
     #only run for the prefilled history list size
     for Date in historyDates:
             History = closest_datetime(Date['Date'], mysticHistory)            
                         
+            #bbs.writeln(unpackdt(Date['Date'],format)+'|PN')
             if History == None:
                 continue
 
@@ -885,7 +919,6 @@ def show_history():
                 History['Doors'] = config.get('mci','cummulative_unavailable')
 
             colors = mci_extract_colors( config.get('mci','datecolors') )
-            format = config.get('general','format')
             bbs.setpinfo(1,color(unpackdt(History['Date'],format),colors))
             bbs.setpinfo(2,str(History['Calls']))            
             bbs.setpinfo(3,str(History['ULs']))
